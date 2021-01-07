@@ -28,6 +28,7 @@
 #define picohttpparser_h
 
 #include <sys/types.h>
+#include <inttypes.h>
 
 #ifdef _MSC_VER
 #define ssize_t intptr_t
