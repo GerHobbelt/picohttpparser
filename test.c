@@ -28,18 +28,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
+#endif
 #include <sys/types.h>
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+
 #include "picotest/picotest.h"
 #include "picohttpparser.h"
+
 
 static int bufis(const char *s, size_t l, const char *t)
 {
     return strlen(t) == l && memcmp(s, t, l) == 0;
 }
 
-static char *inputbuf; /* point to the end of the buffer */
+static char *inputbuf = NULL; /* point to the end of the buffer */
 
 static void test_request(void)
 {
@@ -456,15 +462,24 @@ static void test_chunked_leftdata(void)
 #undef NEXT_REQ
 }
 
-int main(void)
+
+#if defined(BUILD_MONOLITHIC)
+#define main(cnt, arr)      pico_http_test_main(cnt, arr)
+#endif
+
+int main(int argc, const char** argv)
 {
-    long pagesize = sysconf(_SC_PAGESIZE);
+#if defined(_SC_PAGESIZE)
+	long pagesize = sysconf(_SC_PAGESIZE);
     assert(pagesize >= 1);
 
     inputbuf = mmap(NULL, pagesize * 3, PROT_NONE, MAP_ANON | MAP_PRIVATE, -1, 0);
     assert(inputbuf != MAP_FAILED);
     inputbuf += pagesize * 2;
     ok(mprotect(inputbuf - pagesize, pagesize, PROT_READ | PROT_WRITE) == 0);
+#else
+	inputbuf = malloc(4096 * 3);
+#endif
 
     subtest("request", test_request);
     subtest("response", test_response);
@@ -473,7 +488,11 @@ int main(void)
     subtest("chunked-consume-trailer", test_chunked_consume_trailer);
     subtest("chunked-leftdata", test_chunked_leftdata);
 
-    munmap(inputbuf - pagesize * 2, pagesize * 3);
+#if defined(_SC_PAGESIZE)
+	munmap(inputbuf - pagesize * 2, pagesize * 3);
+#else
+	free(inputbuf);
+#endif
 
     return done_testing();
 }

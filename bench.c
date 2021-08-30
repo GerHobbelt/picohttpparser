@@ -44,7 +44,12 @@
     "__utmz=xxxxxxxxx.xxxxxxxxxx.x.x.utmccn=(referral)|utmcsr=reader.livedoor.com|utmcct=/reader/|utmcmd=referral\r\n"             \
     "\r\n"
 
-int main(void)
+
+#if defined(BUILD_MONOLITHIC)
+#define main(cnt, arr)      pico_http_bench_main(cnt, arr)
+#endif
+
+int main(int argc, const char** argv)
 {
     const char *method;
     size_t method_len;
