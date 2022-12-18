@@ -1,4 +1,4 @@
 [submodule "picotest"]
 	path = picotest
-	url = git@github.com:GerHobbelt/picotest.git
+	url = https://github.com/GerHobbelt/picotest.git
 
