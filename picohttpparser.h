@@ -27,6 +27,7 @@
 #ifndef picohttpparser_h
 #define picohttpparser_h
 
+#include <stdint.h>
 #include <sys/types.h>
 #include <inttypes.h>
 
@@ -65,6 +66,8 @@ struct phr_chunked_decoder {
     char consume_trailer;       /* if trailing headers should be consumed */
     char _hex_count;
     char _state;
+    uint64_t _total_read;
+    uint64_t _total_overhead;
 };
 
 /* the function rewrites the buffer given as (buf, bufsz) removing the chunked-

@@ -416,6 +416,7 @@ static void test_chunked(void)
         chunked_test_runners[i](__LINE__, 0, "b\r\nhello world\r\n0\r\n", "hello world", 0);
         chunked_test_runners[i](__LINE__, 0, "6\r\nhello \r\n5\r\nworld\r\n0\r\n", "hello world", 0);
         chunked_test_runners[i](__LINE__, 0, "6;comment=hi\r\nhello \r\n5\r\nworld\r\n0\r\n", "hello world", 0);
+        chunked_test_runners[i](__LINE__, 0, "6 ; comment\r\nhello \r\n5\r\nworld\r\n0\r\n", "hello world", 0);
         chunked_test_runners[i](__LINE__, 0, "6\r\nhello \r\n5\r\nworld\r\n0\r\na: b\r\nc: d\r\n\r\n", "hello world",
                                 sizeof("a: b\r\nc: d\r\n\r\n") - 1);
         chunked_test_runners[i](__LINE__, 0, "b\r\nhello world\r\n0\r\n", "hello world", 0);
@@ -427,6 +428,7 @@ static void test_chunked(void)
         test_chunked_failure(__LINE__, "6\r\nhello \r\nffffffffffffffff\r\nabcdefg", -2);
         test_chunked_failure(__LINE__, "6\r\nhello \r\nfffffffffffffffff\r\nabcdefg", -1);
     }
+    test_chunked_failure(__LINE__, "1x\r\na\r\n0\r\n", -1);
 }
 
 static void test_chunked_consume_trailer(void)
@@ -462,6 +464,53 @@ static void test_chunked_leftdata(void)
 #undef NEXT_REQ
 }
 
+static ssize_t do_test_chunked_overhead(size_t chunk_len, size_t chunk_count, const char *extra)
+{
+    struct phr_chunked_decoder dec = {0};
+    char buf[1024];
+    size_t bufsz;
+    ssize_t ret;
+
+    for (size_t i = 0; i < chunk_count; ++i) {
+        /* build and feed the chunk header */
+        bufsz = (size_t)sprintf(buf, "%zx%s\r\n", chunk_len, extra);
+        if ((ret = phr_decode_chunked(&dec, buf, &bufsz)) != -2)
+            goto Exit;
+        assert(bufsz == 0);
+        /* build and feed the chunk boby */
+        memset(buf, 'A', chunk_len);
+        bufsz = chunk_len;
+        if ((ret = phr_decode_chunked(&dec, buf, &bufsz)) != -2)
+            goto Exit;
+        assert(bufsz == chunk_len);
+        /* build and feed the chunk end (CRLF) */
+        strcpy(buf, "\r\n");
+        bufsz = 2;
+        if ((ret = phr_decode_chunked(&dec, buf, &bufsz)) != -2)
+            goto Exit;
+        assert(bufsz == 0);
+    }
+
+    /* build and feed the end chunk */
+    strcpy(buf, "0\r\n\r\n");
+    bufsz = 5;
+    ret = phr_decode_chunked(&dec, buf, &bufsz);
+    assert(bufsz == 0);
+
+Exit:
+    return ret;
+}
+
+static void test_chunked_overhead(void)
+{
+    ok(do_test_chunked_overhead(100, 10000, "") == 2 /* consume trailer is not set */);
+    ok(do_test_chunked_overhead(10, 100000, "") == 2 /* consume trailer is not set */);
+    ok(do_test_chunked_overhead(1, 1000000, "") == -1);
+
+    ok(do_test_chunked_overhead(10, 100000, "; tiny=1") == 2 /* consume trailer is not set */);
+    ok(do_test_chunked_overhead(10, 100000, "; large=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") == -1);
+}
+
 
 #if defined(BUILD_MONOLITHIC)
 #define main(cnt, arr)      pico_http_test_main(cnt, arr)
@@ -487,6 +536,7 @@ int main(int argc, const char** argv)
     subtest("chunked", test_chunked);
     subtest("chunked-consume-trailer", test_chunked_consume_trailer);
     subtest("chunked-leftdata", test_chunked_leftdata);
+    subtest("chunked-overhead", test_chunked_overhead);
 
 #if defined(_SC_PAGESIZE)
 	munmap(inputbuf - pagesize * 2, pagesize * 3);
